@@ -379,11 +379,34 @@ local function useAbility(slotName, abilityName)
         return false
     end
     
-    local success = game:GetService("ReplicatedStorage"):WaitForChild("Events")
-        :WaitForChild("RemoteFunctions"):WaitForChild("UseAbility")
-        :InvokeServer(abilityName)
+    -- Error handling for remote invocation
+    local success, result = pcall(function()
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        local events = replicatedStorage:FindFirstChild("Events")
+        if not events then
+            error("Events folder not found in ReplicatedStorage")
+        end
+        local remoteFunctions = events:FindFirstChild("RemoteFunctions")
+        if not remoteFunctions then
+            error("RemoteFunctions folder not found in Events")
+        end
+        local useAbilityRemote = remoteFunctions:FindFirstChild("UseAbility")
+        if not useAbilityRemote then
+            error("UseAbility RemoteFunction not found in RemoteFunctions")
+        end
+        return useAbilityRemote:InvokeServer(abilityName)
+    end)
     
-    if success ~= false then
+    if not success then
+        Rayfield:Notify({
+            Title = "Error",
+            Content = "Failed to use ability: " .. tostring(result),
+            Duration = 3
+        })
+        return false
+    end
+    
+    if result ~= false then
         startCooldown(slotName, abilityName)
         return true
     end
@@ -707,7 +730,7 @@ local CooldownInfoTab = Window:CreateTab("Cooldowns", 9471550097)
 CooldownInfoTab:CreateSection("Ability Cooldown Information")
 
 for _, ability in pairs(abilities) do
-    CooldownInfoTab:CreateLabel(ability .. ": " .. abilityCooldowns[ability] .. " seconds")
+    CooldownInfoTab:CreateLabel(ability .. ": " .. abilityCooldowns[authority] .. " seconds")
 end
 
 -- Add UI settings tab
@@ -787,3 +810,7 @@ UISettingsTab:CreateToggle({
 
 -- Start the mobile bar
 task.delay(1, createMobileAbilityBar)
+
+-- Note: If you encounter errors about sound assets (e.g., "Failed to load sound rbxassetid://8797727396732"),
+-- this is likely due to the Rayfield library attempting to play a sound that isn't approved for this game.
+-- You may need to replace the sound ID in Rayfield's source (if accessible) or disable sound effects.
