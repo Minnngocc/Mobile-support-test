@@ -1,0 +1,789 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Window = Rayfield:CreateWindow({
+    Name = "Die of Death Script",
+    Icon = 0,
+    LoadingTitle = "Die of Death",
+    LoadingSubtitle = "by Nothingthere",
+    Theme = "Default",
+})
+
+-- === ABILITIES TAB ===
+local abilities = {
+   "Cloak", "Revolver", "Hotdog", "Punch",
+   "Block", "Caretaker", "Adrenaline", "BonusPad", "Taunt"
+}
+
+-- Define cooldowns for abilities in seconds
+local abilityCooldowns = {
+   Cloak = 50,
+   Revolver = 15,
+   Hotdog = 12,
+   Punch = 50,
+   Block = 40,
+   Caretaker = 30,
+   Adrenaline = 35,
+   BonusPad = 70,
+   Taunt = 25
+}
+
+-- Mobile ability icons
+local abilityIcons = {
+    Cloak = "rbxassetid://15001543989",        -- Cape icon
+    Revolver = "rbxassetid://15001545200",     -- Gun icon
+    Hotdog = "rbxassetid://15001546423",       -- Hotdog icon
+    Punch = "rbxassetid://15001547263",        -- Fist icon
+    Block = "rbxassetid://15001548483",        -- Shield icon
+    Caretaker = "rbxassetid://15001549364",    -- Plus/Medical icon
+    Adrenaline = "rbxassetid://15001550555",   -- Syringe icon
+    BonusPad = "rbxassetid://15001551175",     -- Hammer icon
+    Taunt = "rbxassetid://15001552442"         -- Laugh icon
+}
+
+local slot1 = abilities[1]
+local slot2 = abilities[1]
+local slot3 = abilities[1]
+
+-- Track last usage time for each ability slot
+local lastUsed = {
+    Slot1 = 0,
+    Slot2 = 0,
+    Slot3 = 0
+}
+
+-- Store cooldown UI elements
+local cooldownUIs = {}
+
+-- Mobile bar state
+local mobileBarEnabled = true
+local mobileBarGui = nil
+
+-- Create corner cooldown display
+local function createCornerCooldownDisplay()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "CornerCooldownDisplay"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = game:GetService("CoreGui")
+    
+    local frame = Instance.new("Frame")
+    frame.Name = "CooldownFrame"
+    frame.Size = UDim2.new(0, 200, 0, 120)
+    frame.Position = UDim2.new(0, 10, 1, -130) -- Bottom left
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.5
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 8)
+    uiCorner.Parent = frame
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "TitleLabel"
+    titleLabel.Size = UDim2.new(1, 0, 0, 25)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextSize = 14
+    titleLabel.Text = "ABILITY COOLDOWNS"
+    titleLabel.Parent = frame
+    
+    local separator = Instance.new("Frame")
+    separator.Name = "Separator"
+    separator.Size = UDim2.new(0.9, 0, 0, 1)
+    separator.Position = UDim2.new(0.05, 0, 0, 25)
+    separator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    separator.BackgroundTransparency = 0.7
+    separator.BorderSizePixel = 0
+    separator.Parent = frame
+    
+    local abilityLabels = {}
+    
+    for i = 1, 3 do
+        local slotLabel = Instance.new("TextLabel")
+        slotLabel.Name = "Slot"..i.."Label"
+        slotLabel.Size = UDim2.new(1, -20, 0, 20)
+        slotLabel.Position = UDim2.new(0, 10, 0, 30 + (i-1)*25)
+        slotLabel.BackgroundTransparency = 1
+        slotLabel.Font = Enum.Font.Gotham
+        slotLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        slotLabel.TextSize = 14
+        slotLabel.TextXAlignment = Enum.TextXAlignment.Left
+        slotLabel.Text = "Slot "..i..": Ready"
+        slotLabel.Parent = frame
+        
+        abilityLabels["Slot"..i] = slotLabel
+    end
+    
+    return {
+        gui = screenGui,
+        frame = frame,
+        labels = abilityLabels
+    }
+end
+
+-- Create the corner cooldown display
+local cornerDisplay = createCornerCooldownDisplay()
+
+-- Create mobile ability bar
+local function createMobileAbilityBar()
+    if not mobileBarEnabled then return end
+
+    mobileBarGui = Instance.new("ScreenGui")
+    mobileBarGui.Name = "MobileAbilityBar"
+    mobileBarGui.ResetOnSpawn = false
+    mobileBarGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    mobileBarGui.Parent = game:GetService("CoreGui")
+
+    local frame = Instance.new("Frame")
+    frame.Name = "AbilityBar"
+    frame.Size = UDim2.new(1, 0, 0, 90)
+    frame.Position = UDim2.new(0, 0, 1, -100)
+    frame.BackgroundTransparency = 0.3
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    frame.BorderSizePixel = 0
+    frame.Parent = mobileBarGui
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 15)
+    layout.Parent = frame
+
+    local slotVars = {slot1, slot2, slot3}
+    local slotNames = {"Slot1", "Slot2", "Slot3"}
+
+    for i = 1, 3 do
+        local ability = slotVars[i]
+        local slot = slotNames[i]
+
+        local btn = Instance.new("ImageButton")
+        btn.Name = "AbilityBtn_"..slot
+        btn.Size = UDim2.new(0, 70, 0, 70)
+        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        btn.BackgroundTransparency = 0.2
+        btn.Image = abilityIcons[ability] or ""
+        btn.ScaleType = Enum.ScaleType.Fit
+        btn.Parent = frame
+
+        local cooldownOverlay = Instance.new("Frame")
+        cooldownOverlay.Name = "CooldownOverlay"
+        cooldownOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        cooldownOverlay.BackgroundTransparency = 0.7
+        cooldownOverlay.Size = UDim2.new(1, 0, 1, 0)
+        cooldownOverlay.Position = UDim2.new(0, 0, 0, 0)
+        cooldownOverlay.ZIndex = 10
+        cooldownOverlay.Visible = false
+        cooldownOverlay.Parent = btn
+
+        local cooldownText = Instance.new("TextLabel")
+        cooldownText.Name = "CooldownText"
+        cooldownText.BackgroundTransparency = 1
+        cooldownText.Size = UDim2.new(1, 0, 1, 0)
+        cooldownText.Position = UDim2.new(0, 0, 0, 0)
+        cooldownText.Font = Enum.Font.GothamBold
+        cooldownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        cooldownText.TextStrokeTransparency = 0
+        cooldownText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        cooldownText.TextSize = 18
+        cooldownText.Text = ""
+        cooldownText.ZIndex = 11
+        cooldownText.Parent = cooldownOverlay
+
+        cooldownUIs[slot] = cooldownUIs[slot] or {}
+        cooldownUIs[slot].mobile = {
+            overlay = cooldownOverlay,
+            text = cooldownText
+        }
+
+        btn.MouseButton1Click:Connect(function()
+            useAbility(slot, slotVars[i])
+        end)
+    end
+end
+
+-- Update mobile icons when dropdowns are changed
+local function updateMobileIcons()
+    if not mobileBarEnabled or not mobileBarGui then return end
+    local bar = game:GetService("CoreGui"):FindFirstChild("MobileAbilityBar")
+    if not bar then return end
+    local frame = bar:FindFirstChild("AbilityBar")
+    if not frame then return end
+
+    local slotVars = {slot1, slot2, slot3}
+    local slotNames = {"Slot1", "Slot2", "Slot3"}
+
+    for i = 1, 3 do
+        local button = frame:FindFirstChild("AbilityBtn_"..slotNames[i])
+        if button then
+            button.Image = abilityIcons[slotVars[i]] or ""
+        end
+    end
+end
+
+local Tab = Window:CreateTab("Abilities", 4483362458)
+
+-- Function to check if ability is on cooldown
+local function isOnCooldown(slotName, abilityName)
+    if not lastUsed[slotName] then return false end
+    
+    local cooldown = abilityCooldowns[abilityName]
+    if not cooldown then return false end
+    
+    local elapsed = os.time() - lastUsed[slotName]
+    return elapsed < cooldown
+end
+
+-- Function to get remaining cooldown time
+local function getRemainingCooldown(slotName, abilityName)
+    if not lastUsed[slotName] then return 0 end
+    
+    local cooldown = abilityCooldowns[abilityName]
+    if not cooldown then return 0 end
+    
+    local elapsed = os.time() - lastUsed[slotName]
+    local remaining = cooldown - elapsed
+    
+    return remaining > 0 and remaining or 0
+end
+
+-- Function to create cooldown UI for a button
+local function createCooldownUI(parent, slotName)
+    local cooldownOverlay = Instance.new("Frame")
+    cooldownOverlay.Name = "CooldownOverlay"
+    cooldownOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    cooldownOverlay.BackgroundTransparency = 0.7
+    cooldownOverlay.Size = UDim2.new(1, 0, 1, 0)
+    cooldownOverlay.Position = UDim2.new(0, 0, 0, 0)
+    cooldownOverlay.ZIndex = 10
+    cooldownOverlay.Visible = false
+    cooldownOverlay.Parent = parent
+    
+    local cooldownText = Instance.new("TextLabel")
+    cooldownText.Name = "CooldownText"
+    cooldownText.BackgroundTransparency = 1
+    cooldownText.Size = UDim2.new(1, 0, 1, 0)
+    cooldownText.Position = UDim2.new(0, 0, 0, 0)
+    cooldownText.Font = Enum.Font.GothamBold
+    cooldownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cooldownText.TextStrokeTransparency = 0
+    cooldownText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    cooldownText.TextSize = 18
+    cooldownText.Text = ""
+    cooldownText.ZIndex = 11
+    cooldownText.Parent = cooldownOverlay
+    
+    return {
+        overlay = cooldownOverlay,
+        text = cooldownText
+    }
+end
+
+-- Function to update corner cooldown display
+local function updateCornerDisplay()
+    local slotVariables = {slot1, slot2, slot3}
+    
+    for i = 1, 3 do
+        local slotName = "Slot"..i
+        local abilityName = slotVariables[i]
+        local label = cornerDisplay.labels[slotName]
+        
+        if isOnCooldown(slotName, abilityName) then
+            local remaining = getRemainingCooldown(slotName, abilityName)
+            label.Text = "Slot "..i..": "..abilityName.." ("..math.ceil(remaining).."s)"
+            label.TextColor3 = Color3.fromRGB(255, 150, 150)
+        else
+            label.Text = "Slot "..i..": "..abilityName.." (Ready)"
+            label.TextColor3 = Color3.fromRGB(150, 255, 150)
+        end
+    end
+end
+
+-- Start the corner display update loop
+spawn(function()
+    while true do
+        updateCornerDisplay()
+        wait(0.1)
+    end
+end)
+
+-- Function to start cooldown display
+local function startCooldown(slotName, abilityName)
+    local cooldown = abilityCooldowns[abilityName]
+    if not cooldown then return end
+    
+    lastUsed[slotName] = os.time()
+    
+    local cooldownUI = cooldownUIs[slotName]
+    if not cooldownUI then return end
+    
+    if cooldownUI.overlay then
+        cooldownUI.overlay.Visible = true
+    end
+    if cooldownUI.mobile and cooldownUI.mobile.overlay then
+        cooldownUI.mobile.overlay.Visible = true
+    end
+    
+    local startTime = os.time()
+    
+    if cooldownUI.connection then
+        cooldownUI.connection:Disconnect()
+    end
+    
+    cooldownUI.connection = game:GetService("RunService").Heartbeat:Connect(function()
+        local elapsed = os.time() - startTime
+        local remaining = cooldown - elapsed
+        
+        if remaining <= 0 then
+            if cooldownUI.overlay then
+                cooldownUI.overlay.Visible = false
+                cooldownUI.text.Text = ""
+            end
+            if cooldownUI.mobile and cooldownUI.mobile.overlay then
+                cooldownUI.mobile.overlay.Visible = false
+                cooldownUI.mobile.text.Text = ""
+            end
+            
+            updateCornerDisplay()
+            
+            cooldownUI.connection:Disconnect()
+            cooldownUI.connection = nil
+            return
+        end
+        
+        local remainingText = tostring(math.ceil(remaining))
+        if cooldownUI.text then
+            cooldownUI.text.Text = remainingText
+        end
+        if cooldownUI.mobile and cooldownUI.mobile.text then
+            cooldownUI.mobile.text.Text = remainingText
+        end
+    end)
+    
+    updateCornerDisplay()
+end
+
+-- Function to use ability with cooldown check
+local function useAbility(slotName, abilityName)
+    if isOnCooldown(slotName, abilityName) then
+        local cooldown = abilityCooldowns[abilityName]
+        local remaining = cooldown - (os.time() - lastUsed[slotName])
+        
+        Rayfield:Notify({
+            Title = "Cooldown",
+            Content = abilityName .. " is on cooldown! (" .. math.ceil(remaining) .. "s)",
+            Duration = 1.5
+        })
+        return false
+    end
+    
+    local success = game:GetService("ReplicatedStorage"):WaitForChild("Events")
+        :WaitForChild("RemoteFunctions"):WaitForChild("UseAbility")
+        :InvokeServer(abilityName)
+    
+    if success ~= false then
+        startCooldown(slotName, abilityName)
+        return true
+    end
+    
+    return false
+end
+
+-- Slot 1
+Tab:CreateSection("Ability Slot 1")
+Tab:CreateDropdown({
+   Name = "Ability 1",
+   Options = abilities,
+   CurrentOption = slot1,
+   MultipleOptions = false,
+   Flag = "AbilitySlot1",
+   Callback = function(sel)
+       slot1 = (type(sel) == "table" and sel[1]) or sel
+       updateCornerDisplay()
+       updateMobileIcons()
+   end,
+})
+
+local slot1Button = Tab:CreateButton({
+   Name = "Use Ability 1",
+   Callback = function()
+       useAbility("Slot1", slot1)
+   end,
+})
+
+cooldownUIs["Slot1"] = createCooldownUI(slot1Button.Instance, "Slot1")
+
+Tab:CreateKeybind({
+   Name = "Use Ability 1 (Keybind)",
+   CurrentKeybind = "Z",
+   HoldToInteract = false,
+   Flag = "UseAbilityKey1",
+   Callback = function()
+       print("Keybind 1 pressed →", slot1)
+       useAbility("Slot1", slot1)
+   end,
+})
+
+-- Slot 2
+Tab:CreateSection("Ability Slot 2")
+Tab:CreateDropdown({
+   Name = "Ability 2",
+   Options = abilities,
+   CurrentOption = slot2,
+   MultipleOptions = false,
+   Flag = "AbilitySlot2",
+   Callback = function(sel)
+       slot2 = (type(sel) == "table" and sel[1]) or sel
+       updateCornerDisplay()
+       updateMobileIcons()
+   end,
+})
+
+local slot2Button = Tab:CreateButton({
+   Name = "Use Ability 2",
+   Callback = function()
+       useAbility("Slot2", slot2)
+   end,
+})
+
+cooldownUIs["Slot2"] = createCooldownUI(slot2Button.Instance, "Slot2")
+
+Tab:CreateKeybind({
+   Name = "Use Ability 2 (Keybind)",
+   CurrentKeybind = "X",
+   HoldToInteract = false,
+   Flag = "UseAbilityKey2",
+   Callback = function()
+       print("Keybind 2 pressed →", slot2)
+       useAbility("Slot2", slot2)
+   end,
+})
+
+-- Slot 3
+Tab:CreateSection("Ability Slot 3")
+Tab:CreateDropdown({
+   Name = "Ability 3",
+   Options = abilities,
+   CurrentOption = slot3,
+   MultipleOptions = false,
+   Flag = "AbilitySlot3",
+   Callback = function(sel)
+       slot3 = (type(sel) == "table" and sel[1]) or sel
+       updateCornerDisplay()
+       updateMobileIcons()
+   end,
+})
+
+local slot3Button = Tab:CreateButton({
+   Name = "Use Ability 3",
+   Callback = function()
+       useAbility("Slot3", slot3)
+   end,
+})
+
+cooldownUIs["Slot3"] = createCooldownUI(slot3Button.Instance, "Slot3")
+
+Tab:CreateKeybind({
+   Name = "Use Ability 3 (Keybind)",
+   CurrentKeybind = "C",
+   HoldToInteract = false,
+   Flag = "UseAbilityKey3",
+   Callback = function()
+       print("Keybind 3 pressed →", slot3)
+       useAbility("Slot3", slot3)
+   end,
+})
+
+-- === STAMINA TAB ===
+local StaminaTab = Window:CreateTab("Stamina", 6031075938)
+StaminaTab:CreateSection("Infinite Stamina")
+
+local infStaminaEnabled = false
+local staminaLoop = nil
+
+StaminaTab:CreateToggle({
+    Name = "Infinite Stamina",
+    CurrentValue = false,
+    Flag = "InfStaminaToggle",
+    Callback = function(enabled)
+        infStaminaEnabled = enabled
+
+        if enabled then
+            Rayfield:Notify({
+                Title = "Infinite Stamina",
+                Content = "Enabled (MaxStamina = ∞)",
+                Duration = 3
+            })
+
+            if staminaLoop then
+                staminaLoop:Disconnect()
+            end
+
+            staminaLoop = game:GetService("RunService").Heartbeat:Connect(function()
+                local player = game:GetService("Players").LocalPlayer
+                local character = player.Character
+                
+                if not character then return end
+                
+                local staminaTargets = {
+                    character,
+                    player,
+                    character:FindFirstChildOfClass("Humanoid")
+                }
+                
+                for _, target in pairs(staminaTargets) do
+                    if target then
+                        if target:GetAttribute("MaxStamina") ~= nil then
+                            target:SetAttribute("MaxStamina", math.huge)
+                        end
+                        
+                        if target:GetAttribute("Stamina") ~= nil then
+                            target:SetAttribute("Stamina", math.huge)
+                        end
+                        
+                        for name, _ in pairs(target:GetAttributes()) do
+                            if name:lower():find("stamina") then
+                                target:SetAttribute(name, math.huge)
+                            end
+                        end
+                    end
+                end
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Infinite Stamina",
+                Content = "Disabled",
+                Duration = 2
+            })
+            
+            if staminaLoop then
+                staminaLoop:Disconnect()
+                staminaLoop = nil
+            end
+        end
+    end
+})
+
+-- === ESP TAB ===
+local EspTab = Window:CreateTab("ESP", 6031075939)
+EspTab:CreateSection("Player ESP")
+
+local espEnabled = false
+local espObjects = {}
+
+local function getPlayerTeamColor(player)
+    if player.Team then
+        if player.Team.Name == "Killer" then
+            return Color3.fromRGB(255, 0, 0)
+        elseif player.Team.Name == "Civilians" then
+            return Color3.fromRGB(0, 255, 0)
+        elseif player.Team.Name == "Ghost" then
+            return Color3.fromRGB(150, 150, 255)
+        end
+    end
+    return Color3.fromRGB(255, 255, 0)
+end
+
+local function createESP(player)
+    if player == game.Players.LocalPlayer then return end
+    
+    local espFolder = Instance.new("Folder")
+    espFolder.Name = "ESP_" .. player.Name
+    espFolder.Parent = game.CoreGui
+    
+    espObjects[player.UserId] = espFolder
+    
+    local character = player.Character or player.CharacterAdded:Wait()
+    
+    local boxHighlight = Instance.new("BoxHandleAdornment")
+    boxHighlight.Name = "BoxHighlight"
+    boxHighlight.Size = Vector3.new(4, 5, 1)
+    boxHighlight.Color3 = getPlayerTeamColor(player)
+    boxHighlight.Transparency = 0.7
+    boxHighlight.AlwaysOnTop = true
+    boxHighlight.Adornee = character:WaitForChild("HumanoidRootPart")
+    boxHighlight.ZIndex = 10
+    boxHighlight.Parent = espFolder
+    
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Name = "NameLabel"
+    billboardGui.Size = UDim2.new(0, 100, 0, 40)
+    billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+    billboardGui.AlwaysOnTop = true
+    billboardGui.Adornee = character:WaitForChild("Head")
+    billboardGui.Parent = espFolder
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "Label"
+    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = getPlayerTeamColor(player)
+    nameLabel.TextStrokeTransparency = 0.4
+    nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextScaled = true
+    nameLabel.Text = player.Name
+    nameLabel.Parent = billboardGui
+    
+    player.CharacterAdded:Connect(function(newCharacter)
+        if not espEnabled or not espObjects[player.UserId] then return end
+        
+        local hrp = newCharacter:WaitForChild("HumanoidRootPart")
+        local head = newCharacter:WaitForChild("Head")
+        
+        boxHighlight.Adornee = hrp
+        billboardGui.Adornee = head
+        boxHighlight.Color3 = getPlayerTeamColor(player)
+        nameLabel.TextColor3 = getPlayerTeamColor(player)
+    end)
+    
+    player:GetPropertyChangedSignal("Team"):Connect(function()
+        if not espEnabled or not espObjects[player.UserId] then return end
+        
+        boxHighlight.Color3 = getPlayerTeamColor(player)
+        nameLabel.TextColor3 = getPlayerTeamColor(player)
+    end)
+end
+
+local function clearESP()
+    for userId, folder in pairs(espObjects) do
+        if folder and folder.Parent then
+            folder:Destroy()
+        end
+    end
+    espObjects = {}
+end
+
+EspTab:CreateToggle({
+    Name = "Enable ESP",
+    CurrentValue = false,
+    Flag = "EspToggle",
+    Callback = function(enabled)
+        espEnabled = enabled
+
+        if enabled then
+            for _, player in pairs(game.Players:GetPlayers()) do
+                if player ~= game.Players.LocalPlayer then
+                    createESP(player)
+                end
+            end
+            
+            game.Players.PlayerAdded:Connect(function(player)
+                if espEnabled then
+                    createESP(player)
+                end
+            end)
+            
+            game.Players.PlayerRemoving:Connect(function(player)
+                if espObjects[player.UserId] then
+                    if espObjects[player.UserId].Parent then
+                        espObjects[player.UserId]:Destroy()
+                    end
+                    espObjects[player.UserId] = nil
+                end
+            end)
+            
+            Rayfield:Notify({
+                Title = "ESP",
+                Content = "Enabled",
+                Duration = 3
+            })
+        else
+            clearESP()
+            
+            Rayfield:Notify({
+                Title = "ESP",
+                Content = "Disabled",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Add cooldown information tab
+local CooldownInfoTab = Window:CreateTab("Cooldowns", 9471550097)
+CooldownInfoTab:CreateSection("Ability Cooldown Information")
+
+for _, ability in pairs(abilities) do
+    CooldownInfoTab:CreateLabel(ability .. ": " .. abilityCooldowns[ability] .. " seconds")
+end
+
+-- Add UI settings tab
+local UISettingsTab = Window:CreateTab("UI Settings", 6031075940)
+UISettingsTab:CreateSection("Cooldown Display Settings")
+
+UISettingsTab:CreateToggle({
+    Name = "Show Corner Cooldown Display",
+    CurrentValue = true,
+    Flag = "ShowCornerDisplay",
+    Callback = function(enabled)
+        cornerDisplay.gui.Enabled = enabled
+    end
+})
+
+UISettingsTab:CreateSlider({
+    Name = "Corner Display Transparency",
+    Range = {0, 100},
+    Increment = 5,
+    Suffix = "%",
+    CurrentValue = 50,
+    Flag = "CornerDisplayTransparency",
+    Callback = function(value)
+        cornerDisplay.frame.BackgroundTransparency = value / 100
+    end,
+})
+
+UISettingsTab:CreateDropdown({
+    Name = "Corner Display Position",
+    Options = {"Bottom Left", "Bottom Right", "Top Left", "Top Right"},
+    CurrentOption = "Bottom Left",
+    MultipleOptions = false,
+    Flag = "CornerDisplayPosition",
+    Callback = function(option)
+        if option == "Bottom Left" then
+            cornerDisplay.frame.Position = UDim2.new(0, 10, 1, -130)
+        elseif option == "Bottom Right" then
+            cornerDisplay.frame.Position = UDim2.new(1, -210, 1, -130)
+        elseif option == "Top Left" then
+            cornerDisplay.frame.Position = UDim2.new(0, 10, 0, 10)
+        elseif option == "Top Right" then
+            cornerDisplay.frame.Position = UDim2.new(1, -210, 0, 10)
+        end
+    end,
+})
+
+UISettingsTab:CreateToggle({
+    Name = "Show Mobile Ability Bar",
+    CurrentValue = true,
+    Flag = "ShowMobileBar",
+    Callback = function(enabled)
+        mobileBarEnabled = enabled
+        if enabled then
+            if not mobileBarGui or not mobileBarGui.Parent then
+                createMobileAbilityBar()
+                updateMobileIcons()
+            else
+                mobileBarGui.Enabled = true
+            end
+            Rayfield:Notify({
+                Title = "Mobile Ability Bar",
+                Content = "Enabled",
+                Duration = 2
+            })
+        else
+            if mobileBarGui and mobileBarGui.Parent then
+                mobileBarGui.Enabled = false
+            end
+            Rayfield:Notify({
+                Title = "Mobile Ability Bar",
+                Content = "Disabled",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Start the mobile bar
+task.delay(1, createMobileAbilityBar)
